@@ -131,3 +131,4 @@ export function VideoPlayer({ video, onClose }: VideoPlayerProps) {
   );
 }
 
+

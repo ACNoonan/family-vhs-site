@@ -100,3 +100,4 @@ FINAL_SIZE=$(aws s3 ls "$S3_BUCKET" --profile "$AWS_PROFILE" --recursive --human
 echo -e "${GREEN}Final:${NC} $FINAL_COUNT files uploaded ($FINAL_SIZE)"
 echo -e "${GREEN}Log:${NC} $LOG_FILE"
 
+
