@@ -12,14 +12,15 @@
 # Usage: ./scripts/generate-media.sh
 # ═══════════════════════════════════════════════════════════════════════════
 
-set -e
+# Don't exit on error - we handle errors explicitly
+set +e
 
 # Configuration
 S3_BUCKET="noonan-family-vhs-archive"
 AWS_PROFILE="AWS_CLI"
 TEMP_DIR="/tmp/vhs-media-gen"
 PREVIEW_DURATION=5
-PREVIEW_START_PERCENT=10  # Start preview at 10% into video
+START_TIME_SECONDS=45  # Fixed start time (seconds) - faster than percentage-based seeking
 
 # Colors for output
 RED='\033[0;31m'
@@ -91,8 +92,8 @@ for VIDEO_NAME in $VIDEO_LIST; do
     fi
     
     LOCAL_VIDEO="$TEMP_DIR/${VIDEO_NAME}"
-    LOCAL_THUMB="$TEMP_DIR/${BASE_NAME}.jpg"
-    LOCAL_PREVIEW="$TEMP_DIR/${BASE_NAME}.mp4"
+    LOCAL_THUMB="$TEMP_DIR/${BASE_NAME}_thumb.jpg"
+    LOCAL_PREVIEW="$TEMP_DIR/${BASE_NAME}_preview.mp4"
     
     # Download video from S3
     echo -e "  ${BLUE}📥 Downloading video...${NC}"
@@ -105,18 +106,9 @@ for VIDEO_NAME in $VIDEO_LIST; do
         continue
     fi
     
-    # Get video duration
-    echo -e "  ${BLUE}📊 Analyzing video...${NC}"
-    DURATION=$(ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "$LOCAL_VIDEO" 2>/dev/null || echo "0")
-    
-    if [ "$DURATION" = "0" ] || [ -z "$DURATION" ]; then
-        echo -e "  ${YELLOW}⚠  Could not get duration, using default (30s)${NC}"
-        START_TIME=30
-    else
-        # Calculate start time (10% into video)
-        START_TIME=$(echo "$DURATION * 0.10" | bc 2>/dev/null || echo "30")
-        echo -e "  ${GREEN}Duration: ${DURATION}s, extracting at ${START_TIME}s${NC}"
-    fi
+    # Use fixed start time for speed (seeking deep into large files is very slow)
+    echo -e "  ${BLUE}📊 Using start time: ${START_TIME_SECONDS}s${NC}"
+    START_TIME="$START_TIME_SECONDS"
     
     # Generate thumbnail if not exists
     if [ "$THUMB_EXISTS" -eq 0 ]; then
