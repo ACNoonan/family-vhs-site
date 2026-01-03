@@ -1,13 +1,16 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { VideoPlayer } from "./VideoPlayer";
 
 interface Video {
   key: string;
   name: string;
+  displayName?: string;
   size: number;
   lastModified: string;
+  thumbnailUrl?: string;
+  previewUrl?: string;
 }
 
 export function VideoGallery() {
@@ -15,6 +18,9 @@ export function VideoGallery() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [selectedVideo, setSelectedVideo] = useState<Video | null>(null);
+  const [editingVideo, setEditingVideo] = useState<string | null>(null);
+  const [editName, setEditName] = useState("");
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     fetchVideos();
@@ -23,14 +29,14 @@ export function VideoGallery() {
   const fetchVideos = async () => {
     try {
       const response = await fetch("/api/videos");
-      
+
       if (response.status === 401) {
         window.location.reload();
         return;
       }
-      
+
       const data = await response.json();
-      
+
       if (data.error) {
         setError(data.error);
       } else {
@@ -46,6 +52,47 @@ export function VideoGallery() {
   const handleLogout = async () => {
     await fetch("/api/auth", { method: "DELETE" });
     window.location.reload();
+  };
+
+  const startRename = (video: Video, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setEditingVideo(video.key);
+    setEditName(video.displayName || video.name);
+  };
+
+  const cancelRename = () => {
+    setEditingVideo(null);
+    setEditName("");
+  };
+
+  const saveRename = async (videoKey: string) => {
+    if (!editName.trim()) {
+      cancelRename();
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const response = await fetch("/api/videos/rename", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ videoKey, displayName: editName.trim() }),
+      });
+
+      if (response.ok) {
+        setVideos((prev) =>
+          prev.map((v) =>
+            v.key === videoKey ? { ...v, displayName: editName.trim() } : v
+          )
+        );
+      }
+    } catch (err) {
+      console.error("Failed to rename:", err);
+    } finally {
+      setSaving(false);
+      setEditingVideo(null);
+      setEditName("");
+    }
   };
 
   const formatSize = (bytes: number) => {
@@ -98,7 +145,9 @@ export function VideoGallery() {
             <div className="flex items-center gap-4">
               {/* Mini VHS icon */}
               <div className="w-12 h-8 bg-gradient-to-b from-slate-700 to-slate-800 rounded border border-slate-600 flex items-center justify-center shadow-lg">
-                <span className="text-[6px] font-bold text-amber-400/80">VHS</span>
+                <span className="text-[6px] font-bold text-amber-400/80">
+                  VHS
+                </span>
               </div>
               <div>
                 <h1 className="text-xl font-bold bg-gradient-to-r from-amber-200 to-yellow-100 bg-clip-text text-transparent">
@@ -125,48 +174,27 @@ export function VideoGallery() {
               <span className="text-amber-400/50 text-lg">?</span>
             </div>
             <p className="text-slate-400">No videos found in the archive</p>
-            <p className="text-slate-500 text-sm mt-2">Videos are still being uploaded...</p>
+            <p className="text-slate-500 text-sm mt-2">
+              Videos are still being uploaded...
+            </p>
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {videos.map((video, index) => (
-              <button
+              <VideoCard
                 key={video.key}
-                onClick={() => setSelectedVideo(video)}
-                className="group relative bg-slate-800/50 backdrop-blur border border-slate-700/50 rounded-2xl overflow-hidden hover:border-amber-500/50 transition-all duration-300 hover:scale-[1.02] hover:shadow-xl hover:shadow-amber-500/10 text-left"
-                style={{ animationDelay: `${index * 50}ms` }}
-              >
-                {/* Video thumbnail placeholder */}
-                <div className="aspect-video bg-gradient-to-br from-slate-700 to-slate-800 flex items-center justify-center relative overflow-hidden">
-                  {/* Film grain effect */}
-                  <div className="absolute inset-0 opacity-20 bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIzMDAiIGhlaWdodD0iMzAwIj48ZmlsdGVyIGlkPSJhIiB4PSIwIiB5PSIwIj48ZmVUdXJidWxlbmNlIGJhc2VGcmVxdWVuY3k9Ii43NSIgc3RpdGNoVGlsZXM9InN0aXRjaCIgdHlwZT0iZnJhY3RhbE5vaXNlIi8+PGZlQ29sb3JNYXRyaXggdHlwZT0ic2F0dXJhdGUiIHZhbHVlcz0iMCIvPjwvZmlsdGVyPjxyZWN0IHdpZHRoPSIxMDAlIiBoZWlnaHQ9IjEwMCUiIGZpbHRlcj0idXJsKCNhKSIvPjwvc3ZnPg==')]" />
-                  
-                  {/* VHS style lines */}
-                  <div className="absolute inset-0 bg-gradient-to-b from-transparent via-white/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" style={{ backgroundSize: '100% 4px' }} />
-                  
-                  {/* Play icon */}
-                  <div className="relative z-10 w-16 h-16 rounded-full bg-amber-500/20 border-2 border-amber-500/50 flex items-center justify-center group-hover:bg-amber-500/30 group-hover:scale-110 transition-all">
-                    <svg className="w-6 h-6 text-amber-400 ml-1" fill="currentColor" viewBox="0 0 24 24">
-                      <path d="M8 5v14l11-7z" />
-                    </svg>
-                  </div>
-
-                  {/* VHS timestamp effect */}
-                  <div className="absolute bottom-2 right-2 px-2 py-0.5 bg-black/60 rounded text-amber-400 text-xs font-mono">
-                    {formatSize(video.size)}
-                  </div>
-                </div>
-
-                {/* Video info */}
-                <div className="p-4">
-                  <h3 className="text-white font-medium truncate group-hover:text-amber-200 transition-colors">
-                    {video.name}
-                  </h3>
-                  <p className="text-slate-500 text-sm mt-1">
-                    Click to play
-                  </p>
-                </div>
-              </button>
+                video={video}
+                index={index}
+                isEditing={editingVideo === video.key}
+                editName={editName}
+                saving={saving}
+                onSelect={() => setSelectedVideo(video)}
+                onStartRename={(e) => startRename(video, e)}
+                onEditNameChange={setEditName}
+                onSaveRename={() => saveRename(video.key)}
+                onCancelRename={cancelRename}
+                formatSize={formatSize}
+              />
             ))}
           </div>
         )}
@@ -183,4 +211,196 @@ export function VideoGallery() {
   );
 }
 
+interface VideoCardProps {
+  video: Video;
+  index: number;
+  isEditing: boolean;
+  editName: string;
+  saving: boolean;
+  onSelect: () => void;
+  onStartRename: (e: React.MouseEvent) => void;
+  onEditNameChange: (value: string) => void;
+  onSaveRename: () => void;
+  onCancelRename: () => void;
+  formatSize: (bytes: number) => string;
+}
 
+function VideoCard({
+  video,
+  index,
+  isEditing,
+  editName,
+  saving,
+  onSelect,
+  onStartRename,
+  onEditNameChange,
+  onSaveRename,
+  onCancelRename,
+  formatSize,
+}: VideoCardProps) {
+  const [isHovering, setIsHovering] = useState(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const hoverTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  const handleMouseEnter = () => {
+    // Start preview after a short delay
+    hoverTimeoutRef.current = setTimeout(() => {
+      setIsHovering(true);
+      if (videoRef.current && video.previewUrl) {
+        videoRef.current.currentTime = 0;
+        videoRef.current.play().catch(() => {});
+      }
+    }, 300);
+  };
+
+  const handleMouseLeave = () => {
+    if (hoverTimeoutRef.current) {
+      clearTimeout(hoverTimeoutRef.current);
+    }
+    setIsHovering(false);
+    if (videoRef.current) {
+      videoRef.current.pause();
+      videoRef.current.currentTime = 0;
+    }
+  };
+
+  return (
+    <div
+      className="group relative bg-slate-800/50 backdrop-blur border border-slate-700/50 rounded-2xl overflow-hidden hover:border-amber-500/50 transition-all duration-300 hover:scale-[1.02] hover:shadow-xl hover:shadow-amber-500/10"
+      style={{ animationDelay: `${index * 50}ms` }}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+    >
+      {/* Video thumbnail/preview area */}
+      <button
+        onClick={onSelect}
+        className="w-full aspect-video bg-gradient-to-br from-slate-700 to-slate-800 flex items-center justify-center relative overflow-hidden"
+      >
+        {/* Thumbnail image */}
+        {video.thumbnailUrl && (
+          <img
+            src={video.thumbnailUrl}
+            alt={video.displayName || video.name}
+            className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-300 ${
+              isHovering && video.previewUrl ? "opacity-0" : "opacity-100"
+            }`}
+          />
+        )}
+
+        {/* Preview video (shown on hover) */}
+        {video.previewUrl && (
+          <video
+            ref={videoRef}
+            src={video.previewUrl}
+            muted
+            loop
+            playsInline
+            className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-300 ${
+              isHovering ? "opacity-100" : "opacity-0"
+            }`}
+          />
+        )}
+
+        {/* Fallback when no thumbnail */}
+        {!video.thumbnailUrl && (
+          <>
+            {/* Film grain effect */}
+            <div className="absolute inset-0 opacity-20 bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIzMDAiIGhlaWdodD0iMzAwIj48ZmlsdGVyIGlkPSJhIiB4PSIwIiB5PSIwIj48ZmVUdXJidWxlbmNlIGJhc2VGcmVxdWVuY3k9Ii43NSIgc3RpdGNoVGlsZXM9InN0aXRjaCIgdHlwZT0iZnJhY3RhbE5vaXNlIi8+PGZlQ29sb3JNYXRyaXggdHlwZT0ic2F0dXJhdGUiIHZhbHVlcz0iMCIvPjwvZmlsdGVyPjxyZWN0IHdpZHRoPSIxMDAlIiBoZWlnaHQ9IjEwMCUiIGZpbHRlcj0idXJsKCNhKSIvPjwvc3ZnPg==')]" />
+
+            {/* VHS style lines */}
+            <div
+              className="absolute inset-0 bg-gradient-to-b from-transparent via-white/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"
+              style={{ backgroundSize: "100% 4px" }}
+            />
+          </>
+        )}
+
+        {/* Play icon overlay */}
+        <div
+          className={`relative z-10 w-16 h-16 rounded-full bg-amber-500/20 border-2 border-amber-500/50 flex items-center justify-center transition-all ${
+            isHovering
+              ? "opacity-0 scale-75"
+              : "group-hover:bg-amber-500/30 group-hover:scale-110"
+          }`}
+        >
+          <svg
+            className="w-6 h-6 text-amber-400 ml-1"
+            fill="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path d="M8 5v14l11-7z" />
+          </svg>
+        </div>
+
+        {/* VHS timestamp effect - file size */}
+        <div className="absolute bottom-2 right-2 px-2 py-0.5 bg-black/60 rounded text-amber-400 text-xs font-mono z-10">
+          {formatSize(video.size)}
+        </div>
+      </button>
+
+      {/* Video info */}
+      <div className="p-4">
+        {isEditing ? (
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={editName}
+              onChange={(e) => onEditNameChange(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") onSaveRename();
+                if (e.key === "Escape") onCancelRename();
+              }}
+              className="flex-1 bg-slate-700 text-white px-2 py-1 rounded text-sm border border-slate-600 focus:border-amber-500 focus:outline-none"
+              autoFocus
+              disabled={saving}
+            />
+            <button
+              onClick={onSaveRename}
+              disabled={saving}
+              className="px-2 py-1 bg-amber-500 text-slate-900 rounded text-xs font-medium hover:bg-amber-400 disabled:opacity-50"
+            >
+              {saving ? "..." : "Save"}
+            </button>
+            <button
+              onClick={onCancelRename}
+              disabled={saving}
+              className="px-2 py-1 bg-slate-600 text-white rounded text-xs hover:bg-slate-500 disabled:opacity-50"
+            >
+              ✕
+            </button>
+          </div>
+        ) : (
+          <div className="flex items-start justify-between gap-2">
+            <h3 className="text-white font-medium truncate group-hover:text-amber-200 transition-colors flex-1">
+              {video.displayName || video.name}
+            </h3>
+            <button
+              onClick={onStartRename}
+              className="opacity-0 group-hover:opacity-100 p-1 text-slate-400 hover:text-amber-400 transition-all"
+              title="Rename video"
+            >
+              <svg
+                className="w-4 h-4"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"
+                />
+              </svg>
+            </button>
+          </div>
+        )}
+        {!isEditing && (
+          <p className="text-slate-500 text-sm mt-1">
+            {video.previewUrl ? "Hover to preview" : "Click to play"}
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
